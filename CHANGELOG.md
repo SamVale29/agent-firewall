@@ -9,6 +9,7 @@ All notable changes to Agent Firewall are documented here.
 - Race detection and pull-request vulnerability scanning in CI.
 - CycloneDX SBOMs and GitHub build provenance for future releases.
 - Versioned binary installation guidance and a PowerShell demo.
+- CodeQL analysis and dependency review on protected changes.
 
 ### Changed
 
