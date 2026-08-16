@@ -14,6 +14,7 @@ All notable changes to Agent Firewall are documented here.
 ### Changed
 
 - Pin GitHub Actions used by CI, security, and release workflows to immutable commits.
+- Run grouped Go module and GitHub Actions dependency updates weekly through Dependabot.
 
 ## [0.1.0] - 2026-08-16
 
