@@ -46,6 +46,14 @@ Values are never printed by `status`, `doctor`, dry runs, or audit events.
 
 Hostname rules are part of the policy model. The current container backend can enforce an all-network-off policy; it cannot enforce a list of permitted domains without a separate network proxy. When a policy asks for domain-level behavior, capabilities show `monitor` and explicit enforce mode fails closed.
 
+The container network mode is configured separately:
+
+- `policy` (the default) translates a deny-all policy into `--network none`;
+- `none` disables all container networking;
+- `default` leaves the runtime's default network behavior in place.
+
+If the selected network mode does not satisfy the policy, the backend reports `monitor` rather than claiming enforcement.
+
 ## Validation
 
 ```bash

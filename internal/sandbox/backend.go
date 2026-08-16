@@ -1,3 +1,5 @@
+// Package sandbox defines the backend contract and capability vocabulary used
+// to distinguish enforcement from monitor-only execution.
 package sandbox
 
 import (

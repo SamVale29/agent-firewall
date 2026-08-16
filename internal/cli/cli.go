@@ -1,3 +1,4 @@
+// Package cli implements the afw command tree and stable exit-code contract.
 package cli
 
 import (
@@ -33,12 +34,18 @@ import (
 )
 
 const (
-	ExitSuccess       = 0
-	ExitFailure       = 1
+	// ExitSuccess indicates successful command completion.
+	ExitSuccess = 0
+	// ExitFailure indicates an unspecified CLI failure.
+	ExitFailure = 1
+	// ExitInvalidConfig indicates invalid or unreadable policy configuration.
 	ExitInvalidConfig = 2
-	ExitPolicyDenied  = 3
-	ExitUnavailable   = 4
-	ExitSandbox       = 5
+	// ExitPolicyDenied indicates that policy prevented the requested action.
+	ExitPolicyDenied = 3
+	// ExitUnavailable indicates that the requested backend is unavailable.
+	ExitUnavailable = 4
+	// ExitSandbox indicates a backend execution failure.
+	ExitSandbox = 5
 )
 
 // Build metadata is supplied by release automation through -ldflags.
@@ -104,7 +111,7 @@ func Execute(args []string, in io.Reader, out, errOut io.Writer) int {
 	case "codex", "claude":
 		return application.run(append([]string{"--", args[0]}, args[1:]...))
 	default:
-		fmt.Fprintf(application.err, "afw: unknown command %q\n\n", args[0])
+		_, _ = fmt.Fprintf(application.err, "afw: unknown command %q\n\n", args[0])
 		application.help()
 		return ExitFailure
 	}
@@ -164,7 +171,7 @@ func isTopLevelCommand(value string) bool {
 }
 
 func (a *app) help() {
-	fmt.Fprint(a.out, `Agent Firewall
+	_, _ = fmt.Fprint(a.out, `Agent Firewall
 
 A security layer between AI coding agents and your machine.
 
@@ -204,7 +211,7 @@ func (a *app) version() {
 		})
 		return
 	}
-	fmt.Fprintf(a.out, "Agent Firewall %s\ncommit: %s\nbuilt: %s\ngo: %s\nplatform: %s\n", Version, Commit, Built, runtime.Version(), runtime.GOOS+"/"+runtime.GOARCH)
+	_, _ = fmt.Fprintf(a.out, "Agent Firewall %s\ncommit: %s\nbuilt: %s\ngo: %s\nplatform: %s\n", Version, Commit, Built, runtime.Version(), runtime.GOOS+"/"+runtime.GOARCH)
 }
 
 func (a *app) run(args []string) int {
@@ -231,7 +238,7 @@ func (a *app) run(args []string) int {
 		command = command[1:]
 	}
 	if len(command) == 0 {
-		fmt.Fprintln(a.err, "afw run: expected a command after --")
+		_, _ = fmt.Fprintln(a.err, "afw run: expected a command after --")
 		return ExitFailure
 	}
 	loaded, err := config.Load(a.workdir)
@@ -251,28 +258,10 @@ func (a *app) run(args []string) int {
 		a.errorf("ask-policy: expected deny or allow; got %q", *askPolicy)
 		return ExitInvalidConfig
 	}
-	policyValue := loaded.Policy
-	if effectiveMode == "monitor" {
-		policyValue.Sandbox.Backend = "local"
-	}
-	if effectiveMode == "enforce" {
-		if policyValue.Sandbox.Backend == "local" {
-			a.errorf("cannot start enforce mode with sandbox.backend=local; configure a Docker-compatible runtime")
-			return ExitUnavailable
-		}
-		policyValue.Sandbox.Backend = "container"
-	}
-	selection, err := sandboxdetect.Detect(context.Background(), policyValue)
+	policyValue, selection, err := selectForMode(context.Background(), loaded.Policy, effectiveMode)
 	if err != nil {
 		a.errorf("cannot select backend: %v", err)
 		return ExitUnavailable
-	}
-	if effectiveMode == "enforce" {
-		selection.Mode = "enforce"
-		if selection.Capabilities.Filesystem != publicpolicy.CapabilityEnforce || selection.Capabilities.Network != publicpolicy.CapabilityEnforce || selection.Capabilities.Environment != publicpolicy.CapabilityEnforce {
-			a.errorf("cannot start enforce mode: backend capabilities are filesystem=%s network=%s environment=%s", selection.Capabilities.Filesystem, selection.Capabilities.Network, selection.Capabilities.Environment)
-			return ExitUnavailable
-		}
 	}
 	engine := policy.New(policyValue, loaded.RepoRoot)
 	filteredEnv, removedEnv := engine.FilterEnvironment(os.Environ())
@@ -293,6 +282,8 @@ func (a *app) run(args []string) int {
 			"agent":               adapter.Detect(command[0]),
 			"backend":             selection.Backend.Name(),
 			"mode":                selection.Mode,
+			"policy_hash":         record.PolicyHash,
+			"started_at":          record.StartedAt,
 			"capabilities":        selection.Capabilities,
 			"environment_removed": removedEnv,
 		},
@@ -303,10 +294,18 @@ func (a *app) run(args []string) int {
 	}
 	if policyResult.Decision == publicpolicy.DecisionDeny {
 		a.printDecision(policyResult, riskAnalysis, "blocked")
-		_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason})
+		if err := writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"outcome": "deny"}}); err != nil {
+			a.errorf("cannot write audit decision: %v", err)
+		}
 		record.Finish(ExitPolicyDenied)
-		_ = writer.Write(audit.Event{SessionID: record.ID, Event: "session_end", Details: map[string]any{"exit_status": ExitPolicyDenied}})
+		_ = writer.Write(sessionEndEvent(record, ExitPolicyDenied, nil))
 		return ExitPolicyDenied
+	}
+	if policyResult.Decision == publicpolicy.DecisionAllow {
+		if err := writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"outcome": "allow"}}); err != nil {
+			a.errorf("cannot write audit decision: %v", err)
+			return ExitFailure
+		}
 	}
 	if policyResult.Decision == publicpolicy.DecisionAsk {
 		allowed := false
@@ -318,23 +317,23 @@ func (a *app) run(args []string) int {
 				a.errorf("approval input failed: %v", err)
 				_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"approval_error": true}})
 				record.Finish(ExitPolicyDenied)
-				_ = writer.Write(audit.Event{SessionID: record.ID, Event: "session_end", Details: map[string]any{"exit_status": ExitPolicyDenied}})
+				_ = writer.Write(sessionEndEvent(record, ExitPolicyDenied, nil))
 				return ExitPolicyDenied
 			}
 		}
 		if !allowed {
 			a.printDecision(policyResult, riskAnalysis, "denied")
-			_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"ask_policy": *askPolicy}})
+			_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"ask_policy": *askPolicy, "outcome": "deny"}})
 			record.Finish(ExitPolicyDenied)
-			_ = writer.Write(audit.Event{SessionID: record.ID, Event: "session_end", Details: map[string]any{"exit_status": ExitPolicyDenied}})
+			_ = writer.Write(sessionEndEvent(record, ExitPolicyDenied, nil))
 			return ExitPolicyDenied
 		}
-		_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"approval": "session"}})
+		_ = writer.Write(audit.Event{SessionID: record.ID, Event: "policy_decision", ResourceType: string(policyResult.ResourceType), Resource: policyResult.Resource, Decision: string(policyResult.Decision), Risk: string(riskAnalysis.Level), Rule: policyResult.Rule, Reason: policyResult.Reason, Details: map[string]any{"approved": true, "outcome": "allow"}})
 	}
 	if *dryRun {
 		a.printDryRun(record, selection, command, loaded, removedEnv)
 		record.Finish(ExitSuccess)
-		_ = writer.Write(audit.Event{SessionID: record.ID, Event: "session_end", Details: map[string]any{"exit_status": 0, "dry_run": true}})
+		_ = writer.Write(sessionEndEvent(record, ExitSuccess, map[string]any{"dry_run": true}))
 		return ExitSuccess
 	}
 	a.printLaunch(record, selection, command, loaded)
@@ -363,8 +362,41 @@ func (a *app) run(args []string) int {
 		}
 	}
 	record.Finish(exitCode)
-	_ = writer.Write(audit.Event{SessionID: record.ID, Event: "session_end", Details: map[string]any{"exit_status": exitCode}})
+	_ = writer.Write(sessionEndEvent(record, exitCode, nil))
 	return exitCode
+}
+
+func sessionEndEvent(record session.Record, exitCode int, details map[string]any) audit.Event {
+	if details == nil {
+		details = map[string]any{}
+	}
+	details["exit_status"] = exitCode
+	details["ended_at"] = record.EndedAt
+	details["policy_hash"] = record.PolicyHash
+	return audit.Event{SessionID: record.ID, Event: "session_end", Details: details}
+}
+
+func selectForMode(ctx context.Context, value publicpolicy.Policy, mode string) (publicpolicy.Policy, sandbox.Selection, error) {
+	switch mode {
+	case "monitor":
+		value.Sandbox.Backend = "local"
+	case "enforce":
+		if value.Sandbox.Backend == "local" {
+			return value, sandbox.Selection{}, fmt.Errorf("cannot start enforce mode with sandbox.backend=local; configure a Docker-compatible runtime")
+		}
+		value.Sandbox.Backend = "container"
+	}
+	selection, err := sandboxdetect.Detect(ctx, value)
+	if err != nil {
+		return value, sandbox.Selection{}, err
+	}
+	if mode == "enforce" {
+		selection.Mode = "enforce"
+		if selection.Capabilities.Filesystem != publicpolicy.CapabilityEnforce || selection.Capabilities.Network != publicpolicy.CapabilityEnforce || selection.Capabilities.Environment != publicpolicy.CapabilityEnforce {
+			return value, sandbox.Selection{}, fmt.Errorf("cannot start enforce mode: backend capabilities are filesystem=%s network=%s environment=%s", selection.Capabilities.Filesystem, selection.Capabilities.Network, selection.Capabilities.Environment)
+		}
+	}
+	return value, selection, nil
 }
 
 func (a *app) printLaunch(record session.Record, selection sandbox.Selection, command []string, loaded config.Loaded) {
@@ -388,7 +420,7 @@ func (a *app) printLaunch(record session.Record, selection sandbox.Selection, co
 	} else {
 		a.printer.Warning("network boundary is monitor-only")
 	}
-	fmt.Fprintf(a.out, "\nLaunching: %s\n\n", displayCommand(command))
+	_, _ = fmt.Fprintf(a.out, "\nLaunching: %s\n\n", displayCommand(command))
 }
 
 func (a *app) printDryRun(record session.Record, selection sandbox.Selection, command []string, loaded config.Loaded, removed []string) {
@@ -433,7 +465,7 @@ func (a *app) printDecision(result publicpolicy.Result, analysis risk.Analysis, 
 		"Policy: " + result.Rule,
 	})
 	if status == "denied" || status == "blocked" {
-		fmt.Fprintln(a.out, "Inspect the effective rule with: afw explain")
+		_, _ = fmt.Fprintln(a.out, "Inspect the effective rule with: afw explain")
 	}
 }
 
@@ -457,10 +489,10 @@ func (a *app) init(args []string) int {
 			a.errorf("%s already exists; use --force to replace it", path)
 			return ExitFailure
 		}
-		fmt.Fprintf(a.out, "%s already exists. Replace it? [y/N] ", path)
+		_, _ = fmt.Fprintf(a.out, "%s already exists. Replace it? [y/N] ", path)
 		answer, _ := bufio.NewReader(a.in).ReadString('\n')
 		if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-			fmt.Fprintln(a.out, "Keeping existing policy.")
+			_, _ = fmt.Fprintln(a.out, "Keeping existing policy.")
 			return ExitSuccess
 		}
 	}
@@ -476,8 +508,8 @@ func (a *app) init(args []string) int {
 	a.printer.Label("Repository", root)
 	a.printer.Label("Detected", strings.Join(config.ProjectSignals(root), ", "))
 	a.printer.Success("Created " + path)
-	fmt.Fprintln(a.out, "\nProtected by default: ~/.ssh, ~/.gnupg, ~/.aws, ~/.kube")
-	fmt.Fprintln(a.out, "\nNext steps:\n  afw validate\n  afw status\n  afw run -- codex")
+	_, _ = fmt.Fprintln(a.out, "\nProtected by default: ~/.ssh, ~/.gnupg, ~/.aws, ~/.kube")
+	_, _ = fmt.Fprintln(a.out, "\nNext steps:\n  afw validate\n  afw status\n  afw run -- codex")
 	return ExitSuccess
 }
 
@@ -510,7 +542,7 @@ func (a *app) validate(args []string) int {
 	for _, key := range []string{"filesystem", "network", "shell"} {
 		a.printer.Label(key+" rules", fmt.Sprint(counts[key]))
 	}
-	fmt.Fprintln(a.out, "No conflicting schema values found.")
+	_, _ = fmt.Fprintln(a.out, "No conflicting schema values found.")
 	return ExitSuccess
 }
 
@@ -529,7 +561,7 @@ func (a *app) status(args []string) int {
 		a.errorf("%v", err)
 		return ExitInvalidConfig
 	}
-	selection, detectErr := sandboxdetect.Detect(context.Background(), loaded.Policy)
+	_, selection, detectErr := selectForMode(context.Background(), loaded.Policy, loaded.Policy.Mode)
 	status := map[string]any{
 		"version":      Version,
 		"platform":     config.PlatformLabel(),
@@ -609,7 +641,7 @@ func (a *app) doctor(args []string) int {
 	}
 	containerBackend := container.New(policyValue.Sandbox.Container.Runtime)
 	containerErr := containerBackend.Available(context.Background())
-	selection, selectionErr := sandboxdetect.Detect(context.Background(), policyValue)
+	_, selection, selectionErr := selectForMode(context.Background(), policyValue, policyValue.Mode)
 	filtered, removed := policy.New(policyValue, root).FilterEnvironment(os.Environ())
 	_ = filtered
 	auditLocation := config.AuditPath(policyValue.Audit.Path)
@@ -621,10 +653,14 @@ func (a *app) doctor(args []string) int {
 		{"name": "Network isolation available", "ok": selectionErr == nil && selection.Capabilities.Network == publicpolicy.CapabilityEnforce},
 		{"name": "Audit directory writable", "ok": writable},
 	}
+	ready := configErr == nil && writable && selectionErr == nil
 	if a.json {
-		a.writeJSON(map[string]any{"ready": configErr == nil && writable, "checks": checks, "secret_like_environment_removed": len(removed), "container_error": errorString(containerErr)})
+		a.writeJSON(map[string]any{"ready": ready, "checks": checks, "secret_like_environment_removed": len(removed), "container_error": errorString(containerErr), "selection_error": errorString(selectionErr)})
 		if configErr != nil {
 			return ExitInvalidConfig
+		}
+		if !ready {
+			return ExitUnavailable
 		}
 		return ExitSuccess
 	}
@@ -647,12 +683,14 @@ func (a *app) doctor(args []string) int {
 	}
 	if selectionErr == nil && selection.Note != "" {
 		a.printer.Warning(selection.Note)
+	} else if selectionErr != nil {
+		a.printer.Failure("Backend selection: " + selectionErr.Error())
 	}
-	if configErr == nil && writable {
-		fmt.Fprintln(a.out, "\nOverall\n\nReady for monitor mode. Enforce mode requires an available container with compatible policy capabilities.")
+	if ready {
+		_, _ = fmt.Fprintln(a.out, "\nOverall\n\nReady for monitor mode. Enforce mode requires an available container with compatible policy capabilities.")
 		return ExitSuccess
 	}
-	fmt.Fprintln(a.out, "\nOverall\n\nNeeds attention")
+	_, _ = fmt.Fprintln(a.out, "\nOverall\n\nNeeds attention")
 	return ExitFailure
 }
 
@@ -673,7 +711,7 @@ func (a *app) explain(args []string) int {
 		a.printer.Label("Filesystem default", string(loaded.Policy.Filesystem.Default))
 		a.printer.Label("Network default", string(loaded.Policy.Network.Default))
 		a.printer.Label("Shell default", string(loaded.Policy.Shell.Default))
-		fmt.Fprintln(a.out, "\nUse: afw explain path <path> or afw explain command -- <command>")
+		_, _ = fmt.Fprintln(a.out, "\nUse: afw explain path <path> or afw explain command -- <command>")
 		return ExitSuccess
 	}
 	kind := args[0]
@@ -742,18 +780,18 @@ func (a *app) logs(args []string) int {
 	a.printer.Header("Agent Firewall Audit Log")
 	a.printer.Label("Path", auditPath(loaded))
 	if len(events) == 0 {
-		fmt.Fprintln(a.out, "No matching events.")
+		_, _ = fmt.Fprintln(a.out, "No matching events.")
 		return ExitSuccess
 	}
 	for _, event := range events {
-		fmt.Fprintf(a.out, "%s  %-18s %-8s %s\n", event.Timestamp.Format(time.RFC3339), event.Event, event.Decision, event.Resource)
+		_, _ = fmt.Fprintf(a.out, "%s  %-18s %-8s %s\n", event.Timestamp.Format(time.RFC3339), event.Event, event.Decision, event.Resource)
 	}
 	return ExitSuccess
 }
 
 func (a *app) configCommand(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(a.err, "Usage: afw config show | afw config path")
+		_, _ = fmt.Fprintln(a.err, "Usage: afw config show | afw config path")
 		return ExitFailure
 	}
 	loaded, err := config.Load(a.workdir)
@@ -766,27 +804,27 @@ func (a *app) configCommand(args []string) int {
 		if a.json {
 			a.writeJSON(map[string]string{"repository": loaded.PolicyPath, "global": loaded.GlobalPath, "audit": auditPath(loaded)})
 		} else {
-			fmt.Fprintf(a.out, "repository: %s\nglobal: %s\naudit: %s\n", loaded.PolicyPath, loaded.GlobalPath, auditPath(loaded))
+			_, _ = fmt.Fprintf(a.out, "repository: %s\nglobal: %s\naudit: %s\n", loaded.PolicyPath, loaded.GlobalPath, auditPath(loaded))
 		}
 		return ExitSuccess
 	case "show":
 		a.writeJSON(policyMap(loaded.Policy))
 		return ExitSuccess
 	default:
-		fmt.Fprintf(a.err, "afw config: unknown subcommand %q\n", args[0])
+		_, _ = fmt.Fprintf(a.err, "afw config: unknown subcommand %q\n", args[0])
 		return ExitFailure
 	}
 }
 
 func (a *app) completion(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(a.err, "Usage: afw completion <bash|zsh|fish|powershell>")
+		_, _ = fmt.Fprintln(a.err, "Usage: afw completion <bash|zsh|fish|powershell>")
 		return ExitFailure
 	}
 	command := "afw"
 	switch args[0] {
 	case "bash":
-		fmt.Fprintln(a.out, `_afw_complete() {
+		_, _ = fmt.Fprintln(a.out, `_afw_complete() {
   local cur prev
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -794,18 +832,18 @@ func (a *app) completion(args []string) int {
 }
 complete -F _afw_complete afw`)
 	case "zsh":
-		fmt.Fprintln(a.out, `#compdef afw
+		_, _ = fmt.Fprintln(a.out, `#compdef afw
 _arguments '1:command:(run init validate status doctor explain logs config version completion codex claude)'`)
 	case "fish":
-		fmt.Fprintf(a.out, `complete -c %s -f -a "run init validate status doctor explain logs config version completion codex claude"`, command)
-		fmt.Fprintln(a.out)
+		_, _ = fmt.Fprintf(a.out, `complete -c %s -f -a "run init validate status doctor explain logs config version completion codex claude"`, command)
+		_, _ = fmt.Fprintln(a.out)
 	case "powershell":
-		fmt.Fprintln(a.out, `Register-ArgumentCompleter -CommandName afw -ScriptBlock {
+		_, _ = fmt.Fprintln(a.out, `Register-ArgumentCompleter -CommandName afw -ScriptBlock {
   param($wordToComplete)
   "run","init","validate","status","doctor","explain","logs","config","version","completion","codex","claude" | Where-Object { $_ -like "$wordToComplete*" }
 }`)
 	default:
-		fmt.Fprintf(a.err, "unsupported shell %q\n", args[0])
+		_, _ = fmt.Fprintf(a.err, "unsupported shell %q\n", args[0])
 		return ExitFailure
 	}
 	return ExitSuccess
@@ -815,12 +853,12 @@ func (a *app) writeJSON(value any) {
 	encoder := json.NewEncoder(a.out)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(value); err != nil {
-		fmt.Fprintf(a.err, "afw: encode JSON: %v\n", err)
+		_, _ = fmt.Fprintf(a.err, "afw: encode JSON: %v\n", err)
 	}
 }
 
 func (a *app) errorf(format string, values ...any) {
-	fmt.Fprintf(a.err, "afw: "+format+"\n", values...)
+	_, _ = fmt.Fprintf(a.err, "afw: "+format+"\n", values...)
 }
 
 func colorEnabled(in io.Reader, out io.Writer) bool {

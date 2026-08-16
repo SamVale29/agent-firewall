@@ -1,3 +1,4 @@
+// Package defaults provides the conservative built-in Agent Firewall policy.
 package defaults
 
 import "github.com/SamVale29/agent-firewall/pkg/policy"

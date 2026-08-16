@@ -32,7 +32,7 @@ The container backend detects Docker or Podman, verifies that the runtime is ava
 - a filtered environment;
 - the current host user ID on Unix hosts when possible.
 
-For a fully enforceable network-deny policy, it adds `--network none`. Domain allowlists are modeled in policy but are reported as monitor-only because Docker/Podman alone does not provide the required hostname-level enforcement.
+With `sandbox.container.network: policy`, a policy whose network default is `deny` and has no `allow` or `ask` exceptions is translated to `--network none`. `sandbox.container.network: none` always disables container networking, while `default` leaves the runtime's default network enabled. Domain allowlists are modeled in policy but are reported as monitor-only because Docker/Podman alone does not provide the required hostname-level enforcement.
 
 The command must exist in the selected image. For example, a host-installed `codex` binary is not automatically available inside `ubuntu:24.04`. Build or select an image that contains the agent and its dependencies.
 

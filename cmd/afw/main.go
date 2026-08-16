@@ -1,3 +1,4 @@
+// Package main provides the afw command-line entry point.
 package main
 
 import (

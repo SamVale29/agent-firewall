@@ -1,3 +1,4 @@
+// Package detect selects a backend without silently downgrading enforce mode.
 package detect
 
 import (
@@ -21,7 +22,11 @@ func Detect(ctx context.Context, config policy.Policy) (sandbox.Selection, error
 		if err := containerBackend.Available(ctx); err != nil {
 			return sandbox.Selection{}, fmt.Errorf("container backend requested but unavailable: %w", err)
 		}
-		return sandbox.Selection{Backend: containerBackend, Mode: "enforce", Capabilities: containerBackend.Capabilities(config)}, nil
+		capabilities := containerBackend.Capabilities(config)
+		if capabilities.Network != policy.CapabilityEnforce {
+			return sandbox.Selection{Backend: containerBackend, Mode: "monitor", Capabilities: capabilities, Note: "Container isolation is active, but this policy requests network behavior the backend cannot enforce granularly."}, nil
+		}
+		return sandbox.Selection{Backend: containerBackend, Mode: "enforce", Capabilities: capabilities}, nil
 	case "auto", "":
 		if err := containerBackend.Available(ctx); err == nil {
 			capabilities := containerBackend.Capabilities(config)

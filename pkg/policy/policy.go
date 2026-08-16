@@ -11,27 +11,37 @@ import (
 type Decision string
 
 const (
+	// DecisionAllow permits the evaluated resource without approval.
 	DecisionAllow Decision = "allow"
-	DecisionAsk   Decision = "ask"
-	DecisionDeny  Decision = "deny"
+	// DecisionAsk requires an interactive or configured non-interactive decision.
+	DecisionAsk Decision = "ask"
+	// DecisionDeny blocks the evaluated resource.
+	DecisionDeny Decision = "deny"
 )
 
 // CapabilityLevel describes what a backend can honestly provide.
 type CapabilityLevel string
 
 const (
+	// CapabilityUnsupported means the backend does not provide the control.
 	CapabilityUnsupported CapabilityLevel = "unsupported"
-	CapabilityMonitor     CapabilityLevel = "monitor"
-	CapabilityEnforce     CapabilityLevel = "enforce"
+	// CapabilityMonitor means the backend observes or configures but cannot reliably prevent the behavior.
+	CapabilityMonitor CapabilityLevel = "monitor"
+	// CapabilityEnforce means the backend actively applies the described boundary.
+	CapabilityEnforce CapabilityLevel = "enforce"
 )
 
 // ResourceType identifies the kind of resource evaluated by a policy.
 type ResourceType string
 
 const (
-	ResourcePath        ResourceType = "filesystem"
-	ResourceNetwork     ResourceType = "network"
-	ResourceShell       ResourceType = "shell"
+	// ResourcePath identifies a filesystem path.
+	ResourcePath ResourceType = "filesystem"
+	// ResourceNetwork identifies a network destination.
+	ResourceNetwork ResourceType = "network"
+	// ResourceShell identifies a command pre-flight evaluation.
+	ResourceShell ResourceType = "shell"
+	// ResourceEnvironment identifies an environment inheritance decision.
 	ResourceEnvironment ResourceType = "environment"
 )
 
@@ -135,6 +145,9 @@ func (p Policy) Validate() error {
 	}
 	if strings.TrimSpace(p.Sandbox.Container.Image) == "" {
 		return fmt.Errorf("sandbox.container.image: must not be empty")
+	}
+	if network := p.Sandbox.Container.Network; network != "" && network != "policy" && network != "none" && network != "default" {
+		return fmt.Errorf("sandbox.container.network: expected policy, none, or default, got %q", network)
 	}
 	return nil
 }

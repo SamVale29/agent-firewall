@@ -23,7 +23,7 @@ O objetivo é gerar confiança por meio de capacidades informadas com precisão:
 
 ### Instalar a partir do código-fonte
 
-Requer Go 1.22 ou mais recente:
+Requer Go 1.25 ou mais recente:
 
 ```bash
 go install github.com/SamVale29/agent-firewall/cmd/afw@latest

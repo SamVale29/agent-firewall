@@ -1,3 +1,4 @@
+// Package audit writes and reads redacted local JSON Lines events.
 package audit
 
 import (
@@ -39,10 +40,11 @@ type Writer struct {
 // New creates an audit writer. The file is created lazily on the first event.
 func New(path string, enabled bool) *Writer { return &Writer{path: path, enabled: enabled} }
 
+// Path returns the file used for local audit events.
 func (w *Writer) Path() string { return w.path }
 
 // Write appends one event atomically with respect to this process.
-func (w *Writer) Write(event Event) error {
+func (w *Writer) Write(event Event) (err error) {
 	if !w.enabled {
 		return nil
 	}
@@ -69,7 +71,11 @@ func (w *Writer) Write(event Event) error {
 	if err != nil {
 		return fmt.Errorf("open audit log: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close audit log: %w", closeErr)
+		}
+	}()
 	if _, err := file.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("write audit log: %w", err)
 	}
@@ -83,18 +89,36 @@ func redactDetails(details map[string]any) map[string]any {
 			result[key] = "[REDACTED]"
 			continue
 		}
-		switch typed := value.(type) {
-		case string:
-			result[key] = redact.Text(typed)
-		default:
-			result[key] = typed
-		}
+		result[key] = redactValue(value)
 	}
 	return result
 }
 
+func redactValue(value any) any {
+	switch typed := value.(type) {
+	case string:
+		return redact.Text(typed)
+	case []string:
+		result := make([]string, len(typed))
+		for index, item := range typed {
+			result[index] = redact.Text(item)
+		}
+		return result
+	case []any:
+		result := make([]any, len(typed))
+		for index, item := range typed {
+			result[index] = redactValue(item)
+		}
+		return result
+	case map[string]any:
+		return redactDetails(typed)
+	default:
+		return typed
+	}
+}
+
 // Read returns the newest matching events from the JSONL file.
-func Read(path, session string, last int) ([]Event, error) {
+func Read(path, session string, last int) (events []Event, err error) {
 	file, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return []Event{}, nil
@@ -102,8 +126,11 @@ func Read(path, session string, last int) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
-	var events []Event
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close audit log: %w", closeErr)
+		}
+	}()
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	for scanner.Scan() {
@@ -118,7 +145,7 @@ func Read(path, session string, last int) ([]Event, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if last > 0 && len(events) > last {
+	if last >= 0 && len(events) > last {
 		events = events[len(events)-last:]
 	}
 	return events, nil
@@ -147,4 +174,5 @@ func StableNumbers(values []int) []int {
 	return result
 }
 
+// FormatCount formats an audit count for human-readable output.
 func FormatCount(value int) string { return strconv.Itoa(value) }

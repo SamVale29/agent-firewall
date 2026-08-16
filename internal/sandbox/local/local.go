@@ -1,3 +1,4 @@
+// Package local implements the monitor-only host process backend.
 package local
 
 import (
@@ -13,12 +14,16 @@ import (
 // monitor backend: it cannot intercept arbitrary filesystem or network syscalls.
 type Backend struct{}
 
+// New creates the host-process monitor backend.
 func New() Backend { return Backend{} }
 
+// Name returns the stable backend name.
 func (Backend) Name() string { return "local" }
 
+// Available reports that local process execution is always available.
 func (Backend) Available(context.Context) error { return nil }
 
+// Capabilities reports the monitor-only host boundary and filtered environment.
 func (Backend) Capabilities(policy.Policy) sandbox.Capabilities {
 	return sandbox.Capabilities{
 		Filesystem:  policy.CapabilityMonitor,
@@ -29,6 +34,7 @@ func (Backend) Capabilities(policy.Policy) sandbox.Capabilities {
 	}
 }
 
+// Run starts the requested command directly on the host.
 func (Backend) Run(ctx context.Context, request sandbox.Request) error {
 	if len(request.Command) == 0 {
 		return fmt.Errorf("no command supplied")

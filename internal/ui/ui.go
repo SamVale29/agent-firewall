@@ -1,3 +1,4 @@
+// Package ui renders human-readable terminal output and approval prompts.
 package ui
 
 import (
@@ -17,14 +18,28 @@ type Printer struct {
 	Color bool
 }
 
+// New creates a terminal printer with optional ANSI color output.
 func New(out, err io.Writer, color bool) Printer { return Printer{Out: out, Err: err, Color: color} }
 
-func (p Printer) Header(value string)       { fmt.Fprintln(p.Out, p.paint("1;36", value)) }
-func (p Printer) Success(value string)      { fmt.Fprintf(p.Out, "%s %s\n", p.paint("32", "✓"), value) }
-func (p Printer) Warning(value string)      { fmt.Fprintf(p.Out, "%s %s\n", p.paint("33", "!"), value) }
-func (p Printer) Failure(value string)      { fmt.Fprintf(p.Out, "%s %s\n", p.paint("31", "×"), value) }
-func (p Printer) Label(label, value string) { fmt.Fprintf(p.Out, "%-18s %s\n", label, value) }
-func (p Printer) Section(value string)      { fmt.Fprintf(p.Out, "\n%s\n", p.paint("1", value)) }
+// Header writes a prominent section heading.
+func (p Printer) Header(value string) { p.write("%s\n", p.paint("1;36", value)) }
+
+// Success writes a successful status line.
+func (p Printer) Success(value string) { p.write("%s %s\n", p.paint("32", "✓"), value) }
+
+// Warning writes a warning status line.
+func (p Printer) Warning(value string) { p.write("%s %s\n", p.paint("33", "!"), value) }
+
+// Failure writes a failure status line.
+func (p Printer) Failure(value string) { p.write("%s %s\n", p.paint("31", "×"), value) }
+
+// Label writes a consistently aligned label/value pair.
+func (p Printer) Label(label, value string) { p.write("%-18s %s\n", label, value) }
+
+// Section writes a secondary section heading.
+func (p Printer) Section(value string) { p.write("\n%s\n", p.paint("1", value)) }
+
+func (p Printer) write(format string, values ...any) { _, _ = fmt.Fprintf(p.Out, format, values...) }
 
 func (p Printer) paint(code, value string) string {
 	if !p.Color {
@@ -33,6 +48,7 @@ func (p Printer) paint(code, value string) string {
 	return "\x1b[" + code + "m" + value + "\x1b[0m"
 }
 
+// Capability formats a backend capability level for terminal output.
 func (p Printer) Capability(level policy.CapabilityLevel) string {
 	switch level {
 	case policy.CapabilityEnforce:
@@ -44,6 +60,7 @@ func (p Printer) Capability(level policy.CapabilityLevel) string {
 	}
 }
 
+// Risk formats a risk level for terminal output.
 func (p Printer) Risk(analysis risk.Analysis) string {
 	return p.paint(riskColor(analysis.Level), strings.ToUpper(string(analysis.Level)))
 }
@@ -61,6 +78,7 @@ func riskColor(level risk.Level) string {
 	}
 }
 
+// Box writes a compact bordered message suitable for an approval prompt.
 func (p Printer) Box(title string, lines []string) {
 	width := len(title) + 6
 	for _, line := range lines {
@@ -69,13 +87,13 @@ func (p Printer) Box(title string, lines []string) {
 		}
 	}
 	border := "┌" + strings.Repeat("─", width-2) + "┐"
-	fmt.Fprintln(p.Out, border)
-	fmt.Fprintf(p.Out, "│ %-*s │\n", width-4, p.paint("1", title))
-	fmt.Fprintf(p.Out, "│%s│\n", strings.Repeat(" ", width-2))
+	p.write("%s\n", border)
+	p.write("│ %-*s │\n", width-4, p.paint("1", title))
+	p.write("│%s│\n", strings.Repeat(" ", width-2))
 	for _, line := range lines {
-		fmt.Fprintf(p.Out, "│ %-*s │\n", width-4, line)
+		p.write("│ %-*s │\n", width-4, line)
 	}
-	fmt.Fprintf(p.Out, "└%s┘\n", strings.Repeat("─", width-2))
+	p.write("└%s┘\n", strings.Repeat("─", width-2))
 }
 
 // AskApproval provides a safe, session-scoped choice. It never mutates policy
@@ -90,7 +108,7 @@ func (p Printer) AskApproval(in io.Reader, result policy.Result, analysis risk.A
 		"Requested by: " + requestedBy,
 		"Policy: " + result.Rule,
 	})
-	fmt.Fprintln(p.Out, "\nAction: [a]llow once, [s]ession, [d]eny (default: deny)")
+	p.write("\nAction: [a]llow once, [s]ession, [d]eny (default: deny)\n")
 	reader := bufio.NewReader(in)
 	answer, err := reader.ReadString('\n')
 	if err != nil && len(answer) == 0 {

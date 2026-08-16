@@ -4,7 +4,7 @@ Thanks for helping improve Agent Firewall.
 
 ## Development setup
 
-- Go 1.22 or newer
+- Go 1.25 or newer
 - Git
 - Docker or Podman for container-backend integration work
 - Make (optional)
@@ -37,7 +37,7 @@ A change that affects policy decisions, path canonicalization, environment filte
 
 1. a focused test;
 2. an explanation of the platform assumptions;
-3. an update to `docs/security-model.md`, `docs/threat-model.md`, or `docs/limitations.md) when a guarantee changes;
+3. an update to `docs/security-model.md`, `docs/threat-model.md`, or `docs/limitations.md` when a guarantee changes;
 4. a review for secret leakage in errors and logs.
 
 Never make a monitor-only behavior report as enforced.
