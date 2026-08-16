@@ -32,6 +32,29 @@ Requires Go 1.25 or newer:
 go install github.com/SamVale29/agent-firewall/cmd/afw@latest
 ```
 
+### Install a versioned release
+
+Prebuilt archives for Linux, macOS, and Windows are published on the [GitHub Releases page](https://github.com/SamVale29/agent-firewall/releases). Replace `0.1.0` below with the version you want to install.
+
+For example, on Linux amd64:
+
+```bash
+VERSION=0.1.0
+curl --fail --location --remote-name "https://github.com/SamVale29/agent-firewall/releases/download/v${VERSION}/agent-firewall_${VERSION}_linux_amd64.tar.gz"
+curl --fail --location --remote-name "https://github.com/SamVale29/agent-firewall/releases/download/v${VERSION}/checksums.txt"
+grep "agent-firewall_${VERSION}_linux_amd64.tar.gz" checksums.txt | sha256sum -c -
+tar -xzf "agent-firewall_${VERSION}_linux_amd64.tar.gz"
+sudo install -m 0755 afw /usr/local/bin/afw
+```
+
+On Windows, download the `windows_amd64.zip` archive and `checksums.txt`, then compare the archive's SHA-256 value with the matching line from `checksums.txt`:
+
+```powershell
+Get-FileHash .\agent-firewall_0.1.0_windows_amd64.zip -Algorithm SHA256
+Select-String windows_amd64 checksums.txt
+Expand-Archive .\agent-firewall_0.1.0_windows_amd64.zip -DestinationPath .\afw
+```
+
 ### Initialize and inspect a policy
 
 ```bash
@@ -74,6 +97,12 @@ The deterministic demo uses a disposable temporary directory and never touches r
 
 ```bash
 bash scripts/demo.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+pwsh -File .\scripts\demo.ps1
 ```
 
 Example output:
