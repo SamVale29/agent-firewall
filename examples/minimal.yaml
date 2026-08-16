@@ -1,0 +1,33 @@
+version: 1
+mode: monitor
+filesystem:
+  default: ask
+  allow:
+    - "./**"
+  deny:
+    - "~/.ssh/**"
+    - "~/.aws/**"
+network:
+  default: ask
+  allow:
+    - "github.com"
+shell:
+  default: allow
+  ask:
+    - "rm"
+environment:
+  inherit:
+    - "PATH"
+    - "HOME"
+    - "LANG"
+  deny:
+    - "*_TOKEN"
+    - "*_SECRET"
+audit:
+  enabled: true
+  format: jsonl
+sandbox:
+  backend: local
+  container:
+    image: "ubuntu:24.04"
+    network: policy

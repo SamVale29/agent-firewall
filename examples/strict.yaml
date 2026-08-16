@@ -1,0 +1,38 @@
+version: 1
+mode: enforce
+filesystem:
+  default: deny
+  allow:
+    - "./**"
+  deny:
+    - "~/.ssh/**"
+    - "~/.gnupg/**"
+    - "~/.aws/**"
+    - "~/.kube/**"
+network:
+  default: deny
+shell:
+  default: ask
+  deny:
+    - "sudo"
+    - "shutdown"
+    - "reboot"
+environment:
+  inherit:
+    - "PATH"
+    - "LANG"
+    - "TERM"
+  deny:
+    - "*_TOKEN"
+    - "*_SECRET"
+    - "*_PASSWORD"
+    - "*_PRIVATE_KEY"
+    - "*_API_KEY"
+audit:
+  enabled: true
+  format: jsonl
+sandbox:
+  backend: container
+  container:
+    image: "ubuntu:24.04"
+    network: policy

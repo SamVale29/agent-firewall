@@ -1,0 +1,16 @@
+# Build artifacts
+/bin/
+/dist/
+*.test
+coverage.out
+/upload/
+
+# Local state
+.agent-firewall/
+.afw/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp

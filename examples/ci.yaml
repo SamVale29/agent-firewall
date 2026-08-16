@@ -1,0 +1,35 @@
+version: 1
+mode: enforce
+filesystem:
+  default: deny
+  allow:
+    - "./**"
+  deny:
+    - "~/.ssh/**"
+    - "~/.aws/**"
+network:
+  default: deny
+shell:
+  default: allow
+  ask:
+    - "rm"
+    - "git reset"
+    - "git clean"
+environment:
+  inherit:
+    - "PATH"
+    - "LANG"
+    - "CI"
+    - "TERM"
+  deny:
+    - "*_TOKEN"
+    - "*_SECRET"
+    - "*_PASSWORD"
+audit:
+  enabled: true
+  format: jsonl
+sandbox:
+  backend: container
+  container:
+    image: "ubuntu:24.04"
+    network: policy
