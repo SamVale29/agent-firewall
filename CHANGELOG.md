@@ -10,6 +10,7 @@ All notable changes to Agent Firewall are documented here.
 - CycloneDX SBOMs and GitHub build provenance for future releases.
 - Versioned binary installation guidance and a PowerShell demo.
 - CodeQL analysis and dependency review on protected changes.
+- Real Docker container smoke tests for the repository mount, network isolation, environment filtering, and exit-code contract.
 
 ### Changed
 

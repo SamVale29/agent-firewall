@@ -42,6 +42,8 @@ afw run --mode enforce -- codex
 
 If the runtime is missing, enforce mode exits instead of silently falling back to local execution.
 
+CI runs real Docker smoke tests on Ubuntu with `go test -tags=integration`. The checks execute a command inside `ubuntu:24.04` and verify the repository mount, filtered environment, read-only root, `--network none`, dropped capabilities, `no-new-privileges`, and child exit-code propagation. The normal test suite remains runtime-free, so local contributors without Docker can still run `go test ./...`.
+
 ## Capability levels
 
 | Level | Meaning |
