@@ -4,6 +4,16 @@ All notable changes to Agent Firewall are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Race detection and pull-request vulnerability scanning in CI.
+- CycloneDX SBOMs and GitHub build provenance for future releases.
+- Versioned binary installation guidance and a PowerShell demo.
+
+### Changed
+
+- Pin GitHub Actions used by CI, security, and release workflows to immutable commits.
+
 ## [0.1.0] - 2026-08-16
 
 ### Added

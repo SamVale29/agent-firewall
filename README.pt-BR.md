@@ -33,6 +33,8 @@ go install github.com/SamVale29/agent-firewall/cmd/afw@latest
 
 Os arquivos pré-compilados para Linux, macOS e Windows estão na [página de Releases do GitHub](https://github.com/SamVale29/agent-firewall/releases). Substitua `0.1.0` pela versão desejada.
 
+As novas releases também incluem arquivos SBOM no formato CycloneDX e provenance de build do GitHub, além dos binários e checksums.
+
 Por exemplo, no Linux amd64:
 
 ```bash

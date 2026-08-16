@@ -36,6 +36,8 @@ go install github.com/SamVale29/agent-firewall/cmd/afw@latest
 
 Prebuilt archives for Linux, macOS, and Windows are published on the [GitHub Releases page](https://github.com/SamVale29/agent-firewall/releases). Replace `0.1.0` below with the version you want to install.
 
+New releases also include CycloneDX SBOM files and GitHub build provenance alongside the archives and checksums.
+
 For example, on Linux amd64:
 
 ```bash
