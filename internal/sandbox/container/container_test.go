@@ -116,7 +116,7 @@ func TestNetworkPolicyCanBeEnforced(t *testing.T) {
 	}{
 		{name: "default policy mode", container: "", policy: policy.RuleSet{Default: policy.DecisionDeny}, want: true},
 		{name: "explicit policy mode", container: "policy", policy: policy.RuleSet{Default: policy.DecisionDeny}, want: true},
-		{name: "explicit none mode", container: "none", policy: policy.RuleSet{Default: policy.DecisionAsk}, want: true},
+		{name: "explicit none mode with non-deny policy", container: "none", policy: policy.RuleSet{Default: policy.DecisionAsk}, want: false},
 		{name: "runtime default mode", container: "default", policy: policy.RuleSet{Default: policy.DecisionDeny}, want: false},
 		{name: "allow exception", container: "policy", policy: policy.RuleSet{Default: policy.DecisionDeny, Allow: []string{"example.com"}}, want: false},
 	}
