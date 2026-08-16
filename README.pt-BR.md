@@ -29,6 +29,29 @@ Requer Go 1.25 ou mais recente:
 go install github.com/SamVale29/agent-firewall/cmd/afw@latest
 ```
 
+### Instalar uma release versionada
+
+Os arquivos pré-compilados para Linux, macOS e Windows estão na [página de Releases do GitHub](https://github.com/SamVale29/agent-firewall/releases). Substitua `0.1.0` pela versão desejada.
+
+Por exemplo, no Linux amd64:
+
+```bash
+VERSION=0.1.0
+curl --fail --location --remote-name "https://github.com/SamVale29/agent-firewall/releases/download/v${VERSION}/agent-firewall_${VERSION}_linux_amd64.tar.gz"
+curl --fail --location --remote-name "https://github.com/SamVale29/agent-firewall/releases/download/v${VERSION}/checksums.txt"
+grep "agent-firewall_${VERSION}_linux_amd64.tar.gz" checksums.txt | sha256sum -c -
+tar -xzf "agent-firewall_${VERSION}_linux_amd64.tar.gz"
+sudo install -m 0755 afw /usr/local/bin/afw
+```
+
+No Windows, baixe o arquivo `windows_amd64.zip` e o `checksums.txt`. Compare o SHA-256 do arquivo com a linha correspondente no checksum:
+
+```powershell
+Get-FileHash .\agent-firewall_0.1.0_windows_amd64.zip -Algorithm SHA256
+Select-String windows_amd64 checksums.txt
+Expand-Archive .\agent-firewall_0.1.0_windows_amd64.zip -DestinationPath .\afw
+```
+
 ### Inicializar e inspecionar uma política
 
 ```bash
@@ -71,6 +94,12 @@ O demo determinístico usa um diretório temporário descartável e nunca toca e
 
 ```bash
 bash scripts/demo.sh
+```
+
+No Windows PowerShell:
+
+```powershell
+pwsh -File .\scripts\demo.ps1
 ```
 
 ## Como funciona
