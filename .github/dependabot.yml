@@ -3,8 +3,25 @@ updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "03:17"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    groups:
+      go-minor-and-patch:
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "03:47"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 10
+    groups:
+      github-actions:
+        patterns:
+          - "*"
