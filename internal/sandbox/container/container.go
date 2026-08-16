@@ -90,6 +90,20 @@ func (b Backend) Run(ctx context.Context, request sandbox.Request) error {
 	if image == "" {
 		return fmt.Errorf("sandbox.container.image is empty")
 	}
+	args := containerArgs(request, containerUser())
+
+	command := exec.CommandContext(ctx, runtimeName, args...)
+	command.Dir = request.Dir
+	command.Stdin = request.Stdin
+	command.Stdout = request.Stdout
+	command.Stderr = request.Stderr
+	if err := command.Run(); err != nil {
+		return sandbox.WrapExitError(err)
+	}
+	return nil
+}
+
+func containerArgs(request sandbox.Request, user string) []string {
 	args := []string{
 		"run", "--rm", "--init", "-i",
 		"--cap-drop=ALL",
@@ -106,24 +120,15 @@ func (b Backend) Run(ctx context.Context, request sandbox.Request) error {
 	if networkDisabled(request.Policy) {
 		args = append(args, "--network", "none")
 	}
-	if user := containerUser(); user != "" {
+	if user != "" {
 		args = append(args, "--user", user)
 	}
 	for _, entry := range containerEnvironment(request.Env) {
 		args = append(args, "--env", entry)
 	}
-	args = append(args, image)
+	args = append(args, request.Policy.Sandbox.Container.Image)
 	args = append(args, request.Command...)
-
-	command := exec.CommandContext(ctx, runtimeName, args...)
-	command.Dir = request.Dir
-	command.Stdin = request.Stdin
-	command.Stdout = request.Stdout
-	command.Stderr = request.Stderr
-	if err := command.Run(); err != nil {
-		return sandbox.WrapExitError(err)
-	}
-	return nil
+	return args
 }
 
 func networkPolicyCanBeEnforced(config policy.Policy) bool {
