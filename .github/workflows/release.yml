@@ -56,7 +56,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*
+          path: dist/agent-firewall_*
+          if-no-files-found: error
   publish:
     name: Publish release
     needs: build
