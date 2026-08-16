@@ -25,6 +25,8 @@ The local backend always reports filesystem and network as `monitor`. It launche
 
 The container backend enforces its repository mount and, for an all-network-deny policy, passes `--network none` to Docker or Podman. It does not claim hostname-level enforcement. It cannot protect against a compromised container runtime, a privileged host administrator, a runtime escape, or a host kernel vulnerability.
 
+The container network setting is explicit: `policy` applies the deny-all translation, `none` disables all container networking, and `default` leaves runtime networking enabled. A mode that cannot satisfy the configured policy is reported as `monitor`, and explicit enforce mode fails closed.
+
 ## Trust assumptions
 
 - The user trusts the Agent Firewall binary and its configuration.

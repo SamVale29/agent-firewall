@@ -1,3 +1,4 @@
+// Package container implements the Docker/Podman process boundary.
 package container
 
 import (
@@ -17,12 +18,15 @@ type Backend struct {
 	runtime string
 }
 
+// New creates a container backend using the configured runtime when provided.
 func New(configuredRuntime string) Backend {
 	return Backend{runtime: configuredRuntime}
 }
 
+// Name returns the stable backend name.
 func (b Backend) Name() string { return "container" }
 
+// Runtime returns the configured runtime or the first available Docker-compatible runtime.
 func (b Backend) Runtime() string {
 	if b.runtime != "" {
 		return b.runtime
@@ -36,6 +40,7 @@ func (b Backend) Runtime() string {
 	return ""
 }
 
+// Available verifies that the selected runtime can answer an info request.
 func (b Backend) Available(ctx context.Context) error {
 	runtimeName := b.Runtime()
 	if runtimeName == "" {
@@ -48,9 +53,10 @@ func (b Backend) Available(ctx context.Context) error {
 	return nil
 }
 
+// Capabilities reports the controls implemented by the container invocation.
 func (b Backend) Capabilities(config policy.Policy) sandbox.Capabilities {
 	network := policy.CapabilityMonitor
-	if config.Network.Default == policy.DecisionDeny && len(config.Network.Allow) == 0 && len(config.Network.Ask) == 0 {
+	if networkPolicyCanBeEnforced(config) {
 		network = policy.CapabilityEnforce
 	}
 	return sandbox.Capabilities{
@@ -62,6 +68,7 @@ func (b Backend) Capabilities(config policy.Policy) sandbox.Capabilities {
 	}
 }
 
+// Run starts the requested command inside the configured container boundary.
 func (b Backend) Run(ctx context.Context, request sandbox.Request) error {
 	if len(request.Command) == 0 {
 		return fmt.Errorf("no command supplied")
@@ -96,7 +103,7 @@ func (b Backend) Run(ctx context.Context, request sandbox.Request) error {
 	if request.TTY {
 		args = append(args, "-t")
 	}
-	if request.Policy.Network.Default == policy.DecisionDeny && len(request.Policy.Network.Allow) == 0 && len(request.Policy.Network.Ask) == 0 {
+	if networkDisabled(request.Policy) {
 		args = append(args, "--network", "none")
 	}
 	if user := containerUser(); user != "" {
@@ -117,6 +124,19 @@ func (b Backend) Run(ctx context.Context, request sandbox.Request) error {
 		return sandbox.WrapExitError(err)
 	}
 	return nil
+}
+
+func networkPolicyCanBeEnforced(config policy.Policy) bool {
+	if config.Network.Default != policy.DecisionDeny || len(config.Network.Allow) != 0 || len(config.Network.Ask) != 0 {
+		return false
+	}
+	networkMode := strings.ToLower(config.Sandbox.Container.Network)
+	return networkMode == "" || networkMode == "policy" || networkMode == "none"
+}
+
+func networkDisabled(config policy.Policy) bool {
+	networkMode := strings.ToLower(config.Sandbox.Container.Network)
+	return networkMode == "none" || networkPolicyCanBeEnforced(config)
 }
 
 func containerEnvironment(environment []string) []string {

@@ -1,3 +1,4 @@
+// Package session models one firewall invocation without retaining secret values.
 package session
 
 import (
@@ -46,6 +47,7 @@ func New(command []string, backend, mode string, policyValue any) (Record, error
 	}, nil
 }
 
+// Finish records the child exit status and session end time.
 func (r *Record) Finish(exitCode int) {
 	r.ExitCode = exitCode
 	r.EndedAt = time.Now().UTC()

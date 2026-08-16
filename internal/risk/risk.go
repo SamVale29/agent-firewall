@@ -1,3 +1,4 @@
+// Package risk provides deterministic, explainable command-risk heuristics.
 package risk
 
 import (
@@ -9,9 +10,13 @@ import (
 type Level string
 
 const (
-	Low      Level = "low"
-	Medium   Level = "medium"
-	High     Level = "high"
+	// Low indicates that no elevated-risk pattern matched.
+	Low Level = "low"
+	// Medium indicates a command with meaningful but bounded impact.
+	Medium Level = "medium"
+	// High indicates a command that can affect many files or external state.
+	High Level = "high"
+	// Critical indicates a command that can cross privilege or data-loss boundaries.
 	Critical Level = "critical"
 )
 

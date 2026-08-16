@@ -1,3 +1,5 @@
+// Package policy evaluates the effective filesystem, network, shell, and
+// environment rules without external services or nondeterministic calls.
 package policy
 
 import (
@@ -5,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/SamVale29/agent-firewall/pkg/policy"
@@ -22,6 +25,7 @@ func New(config policy.Policy, root string) Engine {
 	if err == nil {
 		root = abs
 	}
+	root = canonicalizePath(root)
 	return Engine{Policy: config, Root: root}
 }
 
@@ -131,6 +135,7 @@ func (e Engine) matchesPath(path string, patterns []string) (bool, string) {
 			pattern = filepath.Join(e.Root, pattern)
 		}
 		pattern = filepath.Clean(pattern)
+		pattern = canonicalizePath(pattern)
 		if globMatch(pattern, path) {
 			return true, raw
 		}
@@ -182,7 +187,29 @@ func matchCommand(command string, patterns []string) (bool, string) {
 		if candidate == "" {
 			continue
 		}
-		if strings.Contains(lower, candidate) {
+		if strings.ContainsAny(candidate, "|;&<>\n") {
+			if strings.Contains(lower, candidate) {
+				return true, pattern
+			}
+			continue
+		}
+		commandWords := strings.Fields(lower)
+		patternWords := strings.Fields(candidate)
+		if len(patternWords) <= len(commandWords) {
+			for start := 0; start <= len(commandWords)-len(patternWords); start++ {
+				matched := true
+				for offset := range patternWords {
+					if commandWords[start+offset] != patternWords[offset] {
+						matched = false
+						break
+					}
+				}
+				if matched {
+					return true, pattern
+				}
+			}
+		}
+		if lower == candidate {
 			return true, pattern
 		}
 	}
@@ -201,6 +228,10 @@ func matchesAny(value string, patterns []string) bool {
 func globMatch(pattern, value string) bool {
 	pattern = filepath.ToSlash(pattern)
 	value = filepath.ToSlash(value)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		pattern = strings.ToLower(pattern)
+		value = strings.ToLower(value)
+	}
 	if pattern == value {
 		return true
 	}

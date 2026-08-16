@@ -1,6 +1,8 @@
 # Build artifacts
 /bin/
 /dist/
+/afw
+/afw.exe
 *.test
 coverage.out
 /upload/

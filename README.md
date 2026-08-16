@@ -26,7 +26,7 @@ The design goal is trust through accurate capability reporting:
 
 ### Install from source
 
-Requires Go 1.22 or newer:
+Requires Go 1.25 or newer:
 
 ```bash
 go install github.com/SamVale29/agent-firewall/cmd/afw@latest

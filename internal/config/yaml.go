@@ -249,9 +249,10 @@ func splitInlineList(value string) ([]string, error) {
 			}
 			continue
 		}
-		if r == '\'' || r == '"' {
+		switch r {
+		case '\'', '"':
 			quote = r
-		} else if r == ',' {
+		case ',':
 			parts = append(parts, value[start:i])
 			start = i + 1
 		}

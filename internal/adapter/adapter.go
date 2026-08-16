@@ -1,3 +1,5 @@
+// Package adapter contains optional seams for displaying and preparing
+// agent-specific commands without coupling the core policy engine to a vendor.
 package adapter
 
 import "strings"
@@ -32,4 +34,5 @@ func Detect(command string) string {
 	}
 }
 
+// Generic returns the vendor-neutral adapter used by the generic execution path.
 func Generic() Adapter { return generic{} }

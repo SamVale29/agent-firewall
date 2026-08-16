@@ -1,3 +1,4 @@
+// Package config loads and validates the layered Agent Firewall policy.
 package config
 
 import (

@@ -54,3 +54,14 @@ func TestFilterEnvironment(t *testing.T) {
 		t.Fatalf("filtered=%v removed=%v", filtered, removed)
 	}
 }
+
+func TestEvaluateShellUsesCommandBoundaries(t *testing.T) {
+	config := defaults.New()
+	engine := New(config, t.TempDir())
+	if result := engine.EvaluateShell("printf '%s' format"); result.Decision != publicpolicy.DecisionAllow {
+		t.Fatalf("decision = %q, want allow", result.Decision)
+	}
+	if result := engine.EvaluateShell("rm -rf ./build"); result.Decision != publicpolicy.DecisionAsk {
+		t.Fatalf("decision = %q, want ask", result.Decision)
+	}
+}

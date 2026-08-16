@@ -21,3 +21,13 @@ func TestValueRedactsSensitiveEnvironment(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestTextRedactsSensitiveCommandArguments(t *testing.T) {
+	input := `afw --token=abc123 --password hunter2 -H "Authorization: Bearer xyz789"`
+	output := Text(input)
+	for _, secret := range []string{"abc123", "hunter2", "xyz789"} {
+		if strings.Contains(output, secret) {
+			t.Fatalf("secret %q leaked in %q", secret, output)
+		}
+	}
+}
